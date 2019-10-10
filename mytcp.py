@@ -1,4 +1,5 @@
 import asyncio
+import random
 from mytcputils import *
 
 
@@ -34,6 +35,16 @@ class Servidor:
             conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao)
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você acha melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
+            
+            
+            new_seq_no = random.randint(0,0xffff) # Novo SEQ
+            new_flags = FLAGS_SYN + FLAGS_ACK # Flag para ACK
+            new_ack_no = seq_no + 1; # Novo ACK
+
+            new_segment = fix_checksum(make_header(dst_port, src_port, new_seq_no, new_ack_no, new_flags), dst_addr, src_addr)
+            
+            self.rede.enviar(new_segment, src_addr)
+            
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
