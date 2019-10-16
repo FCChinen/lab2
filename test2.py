@@ -105,6 +105,6 @@ for segmento, _ in rede.fila:
         ack_list[ack] = None
 
 ack_list = list(ack_list.keys())
-print('ACKs esperados: %r' % seq_list)
+print('ACKs esperados: %r' % seq_list) # AQUI
 print('ACKs recebidos: %r' % ack_list)
 assert seq_list == ack_list

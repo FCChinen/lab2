@@ -63,7 +63,7 @@ seq_no += len(payload)
 assert recebido == payload
 recebido = b''
 rede.fila.clear()
-
+print("inicia a divisao de segmento")
 for i in range(5):
     nseg = random.randint(2,10)
     payload = os.urandom(nseg*MSS)
@@ -71,6 +71,7 @@ for i in range(5):
     for j in range(nseg):
         segmento, _ = rede.fila.pop(0)
         _, _, seq, ack, flags, _, _, _ = read_header(segmento)
+        print(str(seq)+' '+str(ack_no)) # AQUI
         assert seq == ack_no
         assert (flags & FLAGS_ACK) == FLAGS_ACK and ack == seq_no
         assert segmento[4*(flags>>12):] == payload[j*MSS:(j+1)*MSS]

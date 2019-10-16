@@ -80,6 +80,8 @@ class Conexao:
             dados = payload
             self.callback(self, dados)
             self.seq_no += len(dados)
+            if (len(payload) == 0): # AQUI
+            	self.ack_no += 1 # AQUI
             #self.ack_no += len(payload)
             print('recebido payload: %r' % payload)
             # Pacote com o ACK para confirmação de recebimento de pacote.
@@ -105,20 +107,20 @@ class Conexao:
         # que você construir para a camada de rede.
         
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
-        if (len(dados) > MSS):
+        if (len(dados) <= MSS) and (len(dados) > 0):
+            new_header = make_header(src_port, dst_port, self.ack_no, self.seq_no, FLAGS_ACK)
+            segmento = fix_checksum(new_header, dst_addr, src_addr) + dados
+            self.servidor.rede.enviar(segmento, dst_addr)
+            self.ack_no += len(dados)
+        else:
             new_data = list(chunked(MSS, dados))
             for bloco in new_data:
                 new_header = make_header(src_port, dst_port, self.ack_no, self.seq_no, FLAGS_ACK)
                 segmento = fix_checksum(new_header, dst_addr, src_addr) + bloco
                 self.servidor.rede.enviar(segmento, dst_addr)
                 self.ack_no += len(bloco)
-        if (len(dados) <= MSS) and (len(dados) > 0):
-            new_header = make_header(src_port, dst_port, self.ack_no, self.seq_no, FLAGS_ACK)
-            segmento = fix_checksum(new_header, dst_addr, src_addr) + dados
-            self.servidor.rede.enviar(segmento, dst_addr)
-            self.ack_no += len(dados)
         
-        #pass
+        pass
 
     def fechar(self):
         """
