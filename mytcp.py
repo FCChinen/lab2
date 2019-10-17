@@ -38,7 +38,7 @@ class Servidor:
             new_ack_no = seq_no + 1; # Novo ACK
 
             new_segment = fix_checksum(make_header(dst_port, src_port, new_seq_no, new_ack_no, new_flags), dst_addr, src_addr)
-            
+            new_seq_no += 1
 
             # A flag SYN estar setada significa que é um cliente tentando estabelecer uma conexão nova
             # TODO: talvez você precise passar mais coisas para o construtor de conexão
@@ -76,18 +76,21 @@ class Conexao:
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
-        if (flags & FLAGS_ACK) == FLAGS_ACK and seq_no == self.seq_no:
-            dados = payload
-            self.callback(self, dados)
-            self.seq_no += len(dados)
-            if (len(payload) == 0): # AQUI
-            	self.ack_no += 1 # AQUI
+        if (flags & FLAGS_FIN) == FLAGS_FIN and (len(payload) == 0): # AQUI
+            self.seq_no += 1 # AQUI
+            if self.callback:
+                self.callback(self, b"")
+        if (flags & FLAGS_ACK) == FLAGS_ACK:
+            pass
+        if seq_no == self.seq_no and len(payload) > 0:
+            self.callback(self, payload)
+            src_addr, src_port, dst_addr, dst_port = self.id_conexao
+            self.seq_no += len(payload)
+            new_segment = fix_checksum(make_header(src_port, dst_port, ack_no, self.seq_no, FLAGS_ACK), dst_addr, src_addr)
+            self.servidor.rede.enviar(new_segment, dst_addr)
             #self.ack_no += len(payload)
             print('recebido payload: %r' % payload)
             # Pacote com o ACK para confirmação de recebimento de pacote.
-            src_addr, src_port, dst_addr, dst_port = self.id_conexao
-            new_segment = fix_checksum(make_header(src_port, dst_port, ack_no, seq_no, FLAGS_ACK), dst_addr, src_addr)
-            self.servidor.rede.enviar(new_segment, dst_addr)
 
     # Os métodos abaixo fazem parte da API
 

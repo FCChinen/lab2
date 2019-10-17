@@ -51,7 +51,8 @@ conexao.enviar(payload)
 assert len(rede.fila) == 1
 segmento, _ = rede.fila[0]
 _, _, seq, ack, flags, _, _, _ = read_header(segmento)
-assert seq == ack_no
+print(seq, ack_no)
+assert seq == ack_no   ###
 assert (flags & FLAGS_ACK) == FLAGS_ACK and ack == seq_no
 assert segmento[4*(flags>>12):] == payload
 ack_no += MSS
