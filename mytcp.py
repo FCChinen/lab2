@@ -78,6 +78,11 @@ class Conexao:
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
         if (flags & FLAGS_FIN) == FLAGS_FIN and (len(payload) == 0): # AQUI
             self.seq_no += 1 # AQUI
+            # Envia um segmento de ACK quando receber o FIN
+            src_addr, src_port, dst_addr, dst_port = self.id_conexao
+            new_segment = fix_checksum(make_header(src_port, dst_port, ack_no, self.seq_no, FLAGS_ACK), dst_addr, src_addr)
+            self.servidor.rede.enviar(new_segment, dst_addr)
+            # Envia string vazia para o final de uma conexão
             if self.callback:
                 self.callback(self, b"")
         if (flags & FLAGS_ACK) == FLAGS_ACK:
@@ -131,4 +136,15 @@ class Conexao:
         """
         # TODO: implemente aqui o fechamento de conexão
         
-        pass
+        # Envia a um header com a flag FIN para finalizar a conexão
+        src_addr, src_port, dst_addr, dst_port = self.id_conexao
+        new_header = make_header(src_port, dst_port, self.ack_no, self.seq_no, FLAGS_FIN)
+        segmento = fix_checksum(new_header, dst_addr, src_addr)
+        self.servidor.rede.enviar(segmento, dst_addr)
+        
+        # Limpa os atributos, para que não haja mais conexão
+        self.servidor = None
+        self.id_conexao = None
+        self.callback = None
+        self.seq_no = None
+        self.ack_no = None

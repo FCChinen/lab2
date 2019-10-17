@@ -93,6 +93,7 @@ def main():
     while len(rede.fila) > 0:
         segmento, _ = rede.fila.pop(0)
         _, _, seq, ack, flags, _, _, _ = read_header(segmento)
+        print("1 seq :"+str(seq)+" ack_no :"+str(ack_no))
         # Apenas o segmento mais antigo deve ser reenviado no timeout
         assert seq == ack_no
         assert (flags & FLAGS_ACK) == FLAGS_ACK and ack == seq_no
@@ -106,6 +107,7 @@ def main():
     segmento, _ = rede.fila.pop(0)
     _, _, seq, ack, flags, _, _, _ = read_header(segmento)
     # Agora deve vir o segundo segmento
+    print("2 seq :"+str(seq)+" ack_no :"+str(ack_no))
     assert seq == ack_no
     assert (flags & FLAGS_ACK) == FLAGS_ACK and ack == seq_no
     assert segmento[4*(flags>>12):] == payload[MSS:]
