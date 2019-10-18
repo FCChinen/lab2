@@ -3,6 +3,8 @@ import random
 import time
 from mytcputils import *
 
+SAMPLE_RTT = 1
+
 def chunked(size, source):
     for i in range(0, len(source), size):
         yield source[i:i+size]
@@ -49,6 +51,8 @@ class Servidor:
             
             self.rede.enviar(new_segment, src_addr)
             
+            
+            
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
@@ -72,18 +76,44 @@ class Conexao:
         self.segmentos = []
         # Ack do último segmento enviado
         self.ack_seg = 0
-        # Flag para verificar se há a necessidade de envio de outros segmentos
-        self.prox_seg = False
         self.timer = None # asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
+        
+        self.tempo = 0
+        self.sample_rtt = SAMPLE_RTT
+        self.estimated_rtt = SAMPLE_RTT
+        self.dev_rtt = SAMPLE_RTT/2
+        self.primeirotempo = True
+        self.enviou = False
+        self.timeoutinterval = self.estimated_rtt + 4*self.dev_rtt
+        # Estrutura sabre quais segmentos foram reenviados
+        self.retransmissao = []
+        
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
-    def _exemplo_timer(self):
-        # Esta função é só um exemplo e pode ser removida
-        print('Este é um exemplo de como fazer um timer')
+    def calcula_estimated_rtt(self, alfa):
+        if self.primeirotempo != True:
+            self.estimated_rtt = (1-alfa)*self.estimated_rtt + alfa*self.sample_rtt
+        else:
+            self.estimated_rtt = self.sample_rtt
+        
+    def calcula_dev_rtt(self, beta):
+        if self.primeirotempo != True:
+            self.dev_rtt = (1-beta)*self.dev_rtt + beta*abs(self.sample_rtt-self.estimated_rtt)
+        else:
+            self.dev_rtt = self.sample_rtt/2
+        
+    def calcula_timeoutinterval(self):
+        self.calcula_estimated_rtt(0.125)
+        self.calcula_dev_rtt(0.25)
+        self.timeoutinterval = self.estimated_rtt + 4*self.dev_rtt
+        if (self.enviou == True):
+            self.primeirotempo = False
         
     def _timer_reenvio(self, segmento, dst_address):
         #Essa função é o timer que reenvia a mensagem
         src_addr, src_port, dst_addr, dst_port = self.id_conexao
+        _, _, seq, ack, _, _, _, _ = read_header(segmento)
+        self.retransmissao.append(seq+len(segmento)-20) # ack esperado = seq + quantidade de dados que será enviado(tamanho de um segmento - o header)
         self.servidor.rede.enviar(segmento, dst_addr)
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
@@ -101,7 +131,9 @@ class Conexao:
                 self.callback(self, b"")
         
         if (flags & FLAGS_ACK) == FLAGS_ACK:
-            # Confirma o ack dos seguimentos que chegaram
+            if ack_no not in self.retransmissao:
+                self.sample_rtt = time.time() - self.tempo
+                self.calcula_timeoutinterval()
             for segmento in self.acks_to_confirm:
                 src_addr, src_port, dst_addr, dst_port = self.id_conexao
                 _, _, seq_recebido, ack_recebido, _, _, _, _ = read_header(segmento)
@@ -145,10 +177,13 @@ class Conexao:
             new_header = make_header(src_port, dst_port, self.ack_no, self.seq_no, FLAGS_ACK)
             segmento = fix_checksum(new_header, dst_addr, src_addr) + dados
             self.servidor.rede.enviar(segmento, dst_addr)
-            self.timer = asyncio.get_event_loop().call_later(1, self._timer_reenvio, segmento, dst_addr)
+            self.enviou = True
+            self.tempo = time.time()
             self.ack_no += len(dados)
             self.ack_seg = self.ack_no
-            self.acks_to_confirm.append(segmento)
+            if segmento not in self.acks_to_confirm:
+                self.acks_to_confirm.append(segmento)
+                self.timer = asyncio.get_event_loop().call_later(self.timeoutinterval, self._timer_reenvio, segmento, dst_addr)
         else:
             # Divide o segmento maior que MSS no new_data
             new_data = list(chunked(MSS, dados))
@@ -159,7 +194,7 @@ class Conexao:
                     segmento = fix_checksum(new_header, dst_addr, src_addr) + bloco
                     self.acks_to_confirm.append(segmento)
                     self.servidor.rede.enviar(segmento, dst_addr)
-                    self.timer = asyncio.get_event_loop().call_later(1, self._timer_reenvio, segmento, dst_addr)
+                    self.timer = asyncio.get_event_loop().call_later(self.timeoutinterval, self._timer_reenvio, segmento, dst_addr)
                     self.ack_no += len(bloco)
                     self.ack_seg = self.ack_no
                     divisao_segmento += 1
